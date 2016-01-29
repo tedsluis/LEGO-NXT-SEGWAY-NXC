@@ -1,0 +1,140 @@
+//NXTway-Gyro Segway balancing robot with Hitechnic gyro
+//Play station control add by Techbricks.nl(Ted Sluis) using a Mindsensors PSP-Nx-v3 joystick controller 13.04.2009
+//last update 18.09.2009 - add line SetSensorHTGyro(Gyro_port) ;
+
+//Mindsensors psp-nx PSP controller library
+#include "PSP-Nx-lib.nxc"
+
+//NXT sensor port for Mindsensors psp-nx PSP controller
+const byte SensorPort  =  IN_2;
+#define ADDR     0x02
+/*--------------------------------------
+  Controller button layout:
+----------------------------------------
+     l_j_x      left joystick x-axle
+     l_j_y      left joystick y-axle
+-------------------------------------- */
+#define Gyro_port S3
+
+//variables used for reading out PSP controller
+int count=20;
+int move=0, turn=0,m=0,t=0, M=0, T=0,t1=7;
+psp currState;
+
+//variables used for balaning the bot
+int ng,gn=0,nw=0,rp=0,rg,lrp=0,rwi=0,md;
+int GyroBiasCount,Gyro_value,GyroBias=0, batt;
+long timer1;
+string message, messageA, messageB;
+
+//Read the values of the left jotstick
+task psp_controller()
+  {
+       // Read state psp-nx PSP controller
+       PSP_ReadButtonState(SensorPort, ADDR, currState);
+
+       // read out left joystick - Y-axe
+       move = (currState.l_j_y);
+
+       // read out left joystick - X-axe
+       turn =  - currState.l_j_x;
+
+       // Display the joystick values on the NXT screen;
+       message = "y:       x:          ";
+       messageA = NumToStr(move);
+       messageB = NumToStr(turn);
+       message = StrReplace(message, 3,  messageA);
+       message = StrReplace(message,12 , messageB);
+       TextOut(0, LCD_LINE7, message, false);
+
+       //return the values to the bot balancing task
+       m=move / 16;       //devide joystick y-axe by factor
+       t=turn / 5;        //devide joystick x-axe by factor
+
+       // During the psp_controller task, statements of the balancing task are executed slower.
+       // The processor of the NXT is serving 2 tasks at the same time after all.
+       // Therefore, end the end of the psp_comtroller task, the cuclus delay is set back from 4 ms to 7 ms.
+       t1=7;              //set cyclus delay back to 7 ms
+     }
+task balansing()
+  {
+  while(true)
+   {
+     ng=SensorRaw(S3)-gn; nw+=ng;  //body angle in radians/sec
+     rp=(MotorTachoCount(OUT_A)+MotorTachoCount(OUT_B))/2;    //wheel position
+     M = (M*75+m*25)/100;          //To let the bot lowly get used to the for- and backward movements
+     rg=rp-lrp; lrp=rp; rwi+=rg-M; //wheel speed + joystick forward value
+     if (abs(rwi)>15){gn-=sign(rwi); rwi=0;} //Gyro drift compensation.
+     md=(nw+ng*10+rp*4+rg*200)>>4; //pd contr. NXT small wheels
+  // md=(nw+ng*12+rp*5+rg*360)>>5; //pd contr. RXC large wheels
+     md+=sign(md)*48;              //friction compensation   default = 48
+     SetOutput(OUT_A,              //PID motor control motor A
+               Power,
+               md-t,               //balance correction - joystick turn value.
+               OutputMode,
+               OUT_MODE_MOTORON,
+               RunState,
+               OUT_RUNSTATE_RUNNING,
+               UpdateFlags,
+               UF_UPDATE_MODE+UF_UPDATE_SPEED);
+     SetOutput(OUT_B,              //PID motor control motor A
+               Power,
+               md+t,               //balance correction + joystick turn value.
+               OutputMode,
+               OUT_MODE_MOTORON,
+               RunState,
+               OUT_RUNSTATE_RUNNING,
+               UpdateFlags,
+               UF_UPDATE_MODE+UF_UPDATE_SPEED);
+     if (count==20)                //ones in 20 cycles (= 5 times per second)
+        {
+          count=0;
+          // During the task psp_controller the balancing task runs slower.
+          // Therefore the cuclus delay is set from 7 ms to 4 ms.
+          t1=4;                     // set cyclus delay to 4 ms
+          StartTask(psp_controller);// get joystick values m & t
+        }
+          count+=1;
+      Wait(t1);                     //Delay to slow down the loop to about 100 times/sec (default = 7ms)
+    }
+  }
+
+
+task main(){
+   //set RAW_MODE Gyro sensor port
+     SetSensorHTGyro(Gyro_port) ;
+   // Calculate the Giro Bias for the Hitechnic Gyro sensor.
+   // by measuring the Gyro value many times in 3 secondes.
+   // Gyro Bias is avarage Gyro value: Sum of values devide by time measured.
+   timer1 = CurrentTick();  // set timer1
+   GyroBiasCount = 0;
+   while (CurrentTick() < (3000+timer1)) {
+	  	// filter the sensor output
+      Gyro_value = SensorRaw(S3);
+      Wait(150);
+      GyroBiasCount = GyroBiasCount + 1;
+ 		  gn = gn + Gyro_value;
+ 		  PlayTone(TONE_B7, 5);
+   }
+   GyroBias = gn / GyroBiasCount; //Sum of values devide by time measured.
+   gn=GyroBias;
+
+   // Measure the battery voltage.
+   batt=BatteryLevel();
+
+   // Display calculated GyroBias an battery voltage on the NXT screen;
+   message = "Gbias    Bat          ";
+   messageA = NumToStr(gn);
+   messageB = NumToStr(batt);
+   message = StrReplace(message, 5,  messageA);
+   message = StrReplace(message, 12, messageB);
+   TextOut(0, LCD_LINE1, message, false);
+
+   //calculating GyroBias completed!
+   PlayTone(TONE_B7, 100);
+
+   //start self balansing task
+   Precedes(balansing);
+}
+//end
+

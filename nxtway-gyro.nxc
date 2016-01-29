@@ -1,0 +1,62 @@
+//NXTway-Gyro Segway balancing robot with Hitechnic gyro
+//Based on JanB 20.12.2008 (NXC Bricx 3.3)
+//modified by Techbricks.nl (Ted Sluis)
+//last update 18.09.2009 - add line 9: SetSensorHTGyro(Gyro_port) ;
+#define Gyro_port S3
+
+task main(){
+
+	SetSensorHTGyro(Gyro_port);
+
+ 	int ng,gn=0,nw=0,rp=0,rg,lrp=0,rwi=0,md;
+	int GyroBiasCount,Gyro_value,GyroBias=0, batt;
+	long timer1;
+	string message, messageA, messageB;
+
+	timer1 = CurrentTick();  // set timer1
+
+	// Calculate the Giro Bias for the Hitechnic Gyro sensor.
+	// by measuring the Gyro value many times in 3 secondes.
+	// Gyro Bias is avarage Gyro value.
+  	GyroBiasCount = 0;
+   	while (CurrentTick() < (3000+timer1)) {
+		// filter the sensor output
+      		Gyro_value = SensorRaw(S3);
+      		Wait(150);
+      		GyroBiasCount = GyroBiasCount + 1;
+ 		gn = gn + Gyro_value;
+ 		PlayTone(TONE_B7, 5);
+   	}
+	GyroBias = gn / GyroBiasCount;
+	gn=GyroBias;
+
+	// Measure the battery voltage.
+	batt=BatteryLevel();
+
+	// Display calculated GyroBias an battery voltage on the NXT screen;
+	message = "Gbias    Bat          ";
+	messageA = NumToStr(gn);
+	messageB = NumToStr(batt);
+	message = StrReplace(message, 5,  messageA);
+	message = StrReplace(message, 12, messageB);
+	TextOut(0, LCD_LINE1, message, false);
+
+	PlayTone(TONE_B7, 5);
+
+	while(true){
+     		ng=SensorRaw(S3)-gn; nw+=ng;  //body angle
+		rp=MotorTachoCount(OUT_B);    //wheel position
+		rg=rp-lrp; lrp=rp; rwi+=rg;   //wheel speed
+     		if (abs(rwi)>15){gn-=sign(rwi); rwi=0;} //Gyro drift comp.
+		// md=(nw+ng*10+rp*4+rg*200)>>4; //pd contr. NXT small wheels
+		md=(nw+ng*10+rp*4+rg*200)>>4;
+		// md=(nw+ng*12+rp*5+rg*360)>>5; //pd contr. RXC large wheels
+		md+=sign(md)*48;              //friction compensation   default = 48
+		SetOutput(OUT_AB, Power, md, OutputMode,OUT_MODE_MOTORON,
+		RunState,OUT_RUNSTATE_RUNNING,
+		UpdateFlags,UF_UPDATE_MODE+UF_UPDATE_SPEED);
+		Wait(8);                      //loop about 100 times/sec
+  	}
+}
+//end
+
