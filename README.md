@@ -2,6 +2,7 @@
 
 LEGO NTX segway (NXTway-G) giro bot 
 
+
 *Written in NXC (Not eXactly C, [http://bricxcc.sourceforge.net/nbc](http://bricxcc.sourceforge.net/nbc/)). 
 *Tested on LEGO NXT 1 and 2 with firmware 1.28 ([download](http://bricxcc.sourceforge.net/lms_arm_nbcnxc.zip)).
 *Gyro sensor by Hitech.
